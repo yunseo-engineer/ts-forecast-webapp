@@ -1,0 +1,952 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>ForecastLab — Time-series intelligence</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+<link rel="stylesheet" href="shared.css?v=5" />
+<style>
+  /* Page-specific */
+  body { overflow-x: clip; }
+
+  /* Cursor-reactive backdrop blob */
+  .cursor-blob {
+    position: fixed;
+    width: 600px; height: 600px;
+    border-radius: 50%;
+    background: var(--grad);
+    filter: blur(120px);
+    opacity: 0.35;
+    pointer-events: none;
+    z-index: 0;
+    transition: transform 0.6s cubic-bezier(.2,.9,.2,1), opacity 0.4s;
+    transform: translate(-50%, -50%);
+    mix-blend-mode: screen;
+  }
+
+  /* HERO */
+  .hero {
+    position: relative;
+    min-height: auto;
+    padding: 100px 36px 8px;
+    display: block;
+    max-width: 1400px;
+    margin: 0 auto;
+    z-index: 2;
+  }
+  .hero-copy { position: relative; max-width: 760px; z-index: 3; }
+  .hero h1 {
+    font-family: var(--font-display);
+    font-size: clamp(44px, 5.6vw, 84px);
+    font-weight: 600;
+    letter-spacing: -0.035em;
+    line-height: 1.02;
+    margin: 18px 0 24px;
+    white-space: nowrap;
+  }
+  .hero h1 .line { display: block; overflow: hidden; padding: 0.04em 0; }
+  /* Per-word stronger stagger inside hero h1 */
+  .hero h1 .word-anim {
+    display: inline-block;
+    transform: translateY(120%) rotate(8deg) scale(0.96);
+    opacity: 0;
+    transition:
+      transform 1s cubic-bezier(.2,.9,.2,1),
+      opacity 0.7s ease-out;
+  }
+  .hero h1 .word-anim {
+    animation: heroWordIn 1.1s cubic-bezier(.2,.9,.2,1) backwards;
+  }
+  .hero h1 .line:nth-child(1) .word-anim:nth-child(1) { animation-delay: 0.20s; }
+  .hero h1 .line:nth-child(1) .word-anim:nth-child(2) { animation-delay: 0.30s; }
+  .hero h1 .line:nth-child(1) .word-anim:nth-child(3) { animation-delay: 0.40s; }
+  .hero h1 .line:nth-child(2) .word-anim:nth-child(1) { animation-delay: 0.55s; }
+  .hero h1 .line:nth-child(2) .word-anim:nth-child(2) { animation-delay: 0.66s; }
+  .hero h1 .line:nth-child(2) .word-anim:nth-child(3) { animation-delay: 0.77s; }
+  @keyframes heroWordIn {
+    from { transform: translateY(120%) rotate(8deg) scale(0.96); opacity: 0; }
+    to   { transform: translateY(0) rotate(0) scale(1); opacity: 1; }
+  }
+
+  .hero-eye {
+    opacity: 0; transform: translateY(8px);
+    animation: fadeUp 0.8s ease-out 0.05s forwards;
+  }
+  .hero p.lead {
+    color: var(--ink-dim);
+    font-size: 18px;
+    line-height: 1.6;
+    max-width: 520px;
+    margin: 0 0 36px;
+    opacity: 0; transform: translateY(8px);
+    animation: fadeUp 0.9s ease-out 0.5s forwards;
+  }
+  .hero-cta {
+    display: flex; gap: 12px; align-items: center;
+    opacity: 0; transform: translateY(8px);
+    animation: fadeUp 0.9s ease-out 0.65s forwards;
+  }
+  @keyframes fadeUp { to { opacity: 1; transform: none; } }
+
+  .hero-stats {
+    display: flex; gap: 36px;
+    margin-top: 32px;
+    opacity: 0; transform: translateY(8px);
+    animation: fadeUp 0.9s ease-out 0.85s forwards;
+  }
+  .hero-stat .v {
+    font-family: var(--font-display);
+    font-size: 30px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  .hero-stat .l {
+    color: var(--ink-faint);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  /* HERO VISUAL — 3D chart, full-bleed background layer */
+  .hero-visual {
+    position: absolute;
+    top: 30%; right: 2%;
+    width: 56%;
+    height: 70%;
+    perspective: 1800px;
+    transform-style: preserve-3d;
+    z-index: 1;
+    pointer-events: none;
+    animation: heroFloat 10s ease-in-out infinite;
+    mask-image: linear-gradient(135deg, transparent 0%, black 25%, black 100%);
+    -webkit-mask-image: linear-gradient(135deg, transparent 0%, black 25%, black 100%);
+  }
+  @keyframes heroFloat {
+    0%, 100% { transform: translateY(0) rotateZ(0deg); }
+    50% { transform: translateY(-14px) rotateZ(0.4deg); }
+  }
+  .visual-stage {
+    position: absolute; inset: 0;
+    transform-style: preserve-3d;
+    transition: transform 0.4s cubic-bezier(.2,.9,.2,1);
+    animation: stageEnter 1.6s cubic-bezier(.2,.9,.2,1) backwards;
+    pointer-events: auto;
+  }
+  @keyframes stageEnter {
+    from { transform: rotateY(-30deg) rotateX(20deg) scale(0.85); opacity: 0; }
+    to { transform: rotateY(0) rotateX(0) scale(1); opacity: 1; }
+  }
+  .visual-card {
+    position: absolute; inset: 0;
+    border-radius: 0;
+    overflow: visible;
+    background: transparent;
+    border: none;
+    backdrop-filter: none;
+    pointer-events: auto;
+    cursor: pointer;
+  }
+  .visual-card svg { width: 100%; height: 100%; overflow: visible; }
+
+  /* axis grid */
+  .grid-line { stroke: rgba(255,255,255,0.06); stroke-width: 1; }
+  .axis-label { fill: var(--ink-faint); font-family: var(--font-mono); font-size: 9px; }
+
+  /* main forecast line — JS handles draw-on animation via animateDraw() */
+  .ts-line {
+    fill: none;
+    stroke: url(#tsGrad);
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    filter: drop-shadow(0 0 12px rgba(124,58,237,0.6));
+  }
+  .ts-pred {
+    fill: none;
+    stroke: url(#predGrad);
+    stroke-width: 2;
+  }
+  .ts-band {
+    fill: url(#bandGrad);
+  }
+  @keyframes fadeIn { to { opacity: 1; } }
+
+  .ts-dot {
+    fill: white;
+    opacity: 0;
+    animation: fadeIn 0.4s ease-out forwards;
+    filter: drop-shadow(0 0 6px rgba(124,58,237,0.8));
+  }
+
+  .floating-card {
+    position: absolute;
+    background: rgba(10, 12, 35, 0.85);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--line-strong);
+    border-radius: 14px;
+    padding: 12px 16px;
+    box-shadow: 0 20px 60px -20px rgba(0,0,0,0.6);
+    transform-style: preserve-3d;
+    opacity: 0;
+    animation: fadeUp 0.8s ease-out forwards;
+  }
+  .fc-1 { top: 10%; right: 4%; animation-delay: 2.9s; transform: translateZ(50px); pointer-events: auto; }
+  .fc-2 { top: 50%; right: 0%; animation-delay: 3.1s; transform: translateZ(40px); pointer-events: auto; }
+  .fc-3 { top: 80%; right: 8%; animation-delay: 3.3s; transform: translateZ(30px); pointer-events: auto; }
+
+  .fc-label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 4px;
+  }
+  .fc-value {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 16px;
+  }
+  .fc-trend {
+    color: #10b981;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    margin-top: 2px;
+  }
+
+  .scroll-hint {
+    position: absolute;
+    bottom: 32px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: var(--ink-faint);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    opacity: 0;
+    animation: fadeUp 0.9s ease-out 1.5s forwards;
+  }
+  .scroll-hint::after {
+    content: '';
+    width: 1px; height: 32px;
+    background: linear-gradient(to bottom, var(--ink-faint), transparent);
+    animation: scrollPulse 2s ease-in-out infinite;
+  }
+  @keyframes scrollPulse {
+    0%, 100% { transform: scaleY(0.5); transform-origin: top; opacity: 0.3; }
+    50% { transform: scaleY(1); opacity: 1; }
+  }
+
+  /* SECTION layout */
+  .section {
+    position: relative;
+    padding: 28px 36px;
+    max-width: 1400px;
+    margin: 0 auto;
+    z-index: 2;
+  }
+  /* word-by-word entry animation */
+  .word-anim {
+    display: inline-block;
+    transform: translateY(110%) rotate(4deg);
+    opacity: 0;
+    transition: transform 0.9s cubic-bezier(.2,.9,.2,1), opacity 0.6s ease-out;
+    will-change: transform;
+  }
+  .in .word-anim, h2.in .word-anim, h1 .word-anim {
+    transform: translateY(0) rotate(0);
+    opacity: 1;
+  }
+  .section h2, .cta-block h2 { overflow: hidden; padding-bottom: 0.05em; }
+  /* parallax: section content shifts based on --p */
+  .section .section-eye, .cta-block .section-eye {
+    transform: translateY(calc(var(--p, 0) * -28px));
+    transition: transform 0.1s linear;
+  }
+  .section h2, .cta-block h2 {
+    transform: translateY(var(--scroll-y, 0));
+    transition: transform 0.1s linear;
+  }
+  .section p.lead, .cta-block p.lead {
+    transform: translateY(calc(var(--scroll-y, 0px) * 0.6));
+    transition: transform 0.1s linear;
+  }
+  .section-eye {
+    display: inline-flex; align-items: center; gap: 12px;
+    margin-bottom: 24px;
+  }
+  .section-eye::before {
+    content: ''; width: 28px; height: 1px; background: var(--grad);
+  }
+  .section h2 {
+    font-family: var(--font-display);
+    font-size: clamp(36px, 4.4vw, 60px);
+    letter-spacing: -0.025em;
+    line-height: 1.05;
+    margin: 0 0 24px;
+    max-width: 16ch;
+  }
+  .section p.lead {
+    color: var(--ink-dim);
+    font-size: 17px;
+    line-height: 1.7;
+    max-width: 60ch;
+  }
+
+  /* Section: What is time-series */
+  .what-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+    align-items: stretch;
+    margin-top: 24px;
+    position: relative;
+    min-height: 480px;
+  }
+  .what-grid > .reveal:first-child {
+    position: relative;
+    z-index: 3;
+    max-width: 60%;
+    padding: 60px 0 80px;
+  }
+  .diagram-card {
+    position: absolute;
+    inset: 100px 0 0 30%;
+    height: calc(100% - 100px);
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    backdrop-filter: none;
+    overflow: visible;
+    z-index: 1;
+    pointer-events: none;
+  }
+  .diagram-card::after {
+    content: '';
+    position: absolute;
+    inset: -8% -8% -8% -8%;
+    background:
+      radial-gradient(ellipse 55% 50% at 40% 50%, rgba(124,58,237,0.10), transparent 70%),
+      radial-gradient(ellipse 45% 40% at 75% 45%, rgba(59,130,246,0.08), transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+    filter: blur(28px);
+  }
+  /* Soft fade on left + right edges via mask — dissolves the chart into whatever is behind it */
+  .diagram-card {
+    -webkit-mask-image: linear-gradient(90deg, transparent 0%, black 18%, black 82%, transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0%, black 18%, black 82%, transparent 100%);
+  }
+  .diagram-card::before {
+    content: none;
+  }
+  .ov-svg {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Hero cursor-following gradient blob */
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: radial-gradient(600px circle at var(--mx, 30%) var(--my, 40%), rgba(124,58,237,0.18), transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+    transition: background 0.2s ease-out;
+  }
+
+  /* Pipeline section */
+  .pipeline {
+    margin-top: 56px;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 16px;
+    position: relative;
+  }
+  .pipe-step {
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--blur));
+    border: 1px solid var(--glass-border);
+    border-radius: 18px;
+    padding: 24px;
+    position: relative;
+    transition: transform 0.4s, border-color 0.4s, box-shadow 0.4s;
+  }
+  .pipe-step:hover {
+    transform: translateY(-4px);
+    border-color: var(--line-strong);
+    box-shadow: 0 20px 60px -20px rgba(124,58,237,0.4);
+  }
+  .pipe-step .num {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--ink-faint);
+    letter-spacing: 0.24em;
+  }
+  .pipe-step .title {
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: 17px;
+    margin: 12px 0 8px;
+  }
+  .pipe-step .desc {
+    color: var(--ink-dim);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  .pipe-step .icon {
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    background: var(--grad-soft);
+    border: 1px solid var(--line-strong);
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 16px;
+    color: white;
+  }
+  .pipe-step::after {
+    content: '→';
+    position: absolute;
+    right: -12px; top: 50%;
+    transform: translateY(-50%);
+    color: var(--ink-faint);
+    font-family: var(--font-mono);
+    z-index: 1;
+  }
+  .pipe-step:last-child::after { display: none; }
+
+  /* Features */
+  .features {
+    margin-top: 60px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+  .feat {
+    padding: 32px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--blur));
+    border: 1px solid var(--glass-border);
+    border-radius: 22px;
+    transition: transform 0.4s, border-color 0.4s;
+  }
+  .feat:hover { transform: translateY(-4px); border-color: var(--line-strong); }
+  .feat .ficon {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    background: var(--grad);
+    margin-bottom: 18px;
+    display: flex; align-items: center; justify-content: center;
+    color: white;
+    box-shadow: 0 10px 24px -8px rgba(124,58,237,0.6);
+  }
+  .feat h3 { font-family: var(--font-display); font-size: 22px; margin: 0 0 10px; letter-spacing: -0.01em; }
+  .feat p { color: var(--ink-dim); font-size: 14px; line-height: 1.6; margin: 0; }
+
+  /* CTA section */
+  .cta-block {
+    margin-top: 60px;
+    padding: 80px 60px;
+    background: var(--glass-bg-strong);
+    backdrop-filter: blur(28px);
+    border: 1px solid var(--line-strong);
+    border-radius: 32px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .cta-block::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: var(--grad-soft);
+    opacity: 0.6;
+    z-index: -1;
+  }
+  .cta-block h2 { margin: 0 auto 16px; text-align: center; max-width: 880px; display: block; }
+  .cta-block h2 .word-anim { display: inline-block; }
+  .cta-block p { color: var(--ink-dim); font-size: 17px; margin: 0 auto 32px; text-align: center; max-width: 680px; }
+  .cta-block .eyebrow { text-align: center; }
+  .cta-block .btn { margin: 0 auto; }
+
+  /* Diagram for "what is" */
+  .what-svg .pulse-line {
+    stroke: url(#whatGrad);
+    stroke-width: 2;
+    fill: none;
+    stroke-linecap: round;
+  }
+  .what-svg .pulse-pt {
+    fill: white;
+    filter: drop-shadow(0 0 8px var(--grad-2));
+  }
+
+  /* Anchor scroll padding */
+  section[id] { scroll-margin-top: 90px; }
+  .nav-links a.active { color: var(--ink); }
+  .nav-links a.active::after {
+    content: '';
+    position: absolute;
+    left: 50%; bottom: -8px;
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: var(--grad-2);
+    transform: translateX(-50%);
+    box-shadow: 0 0 8px var(--grad-2);
+  }
+  .nav-links a:not(.start-btn) { position: relative; }
+
+  /* === MODELS section === */
+  .models-grid {
+    margin-top: 56px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 22px;
+  }
+  .model-card {
+    position: relative;
+    padding: 30px 32px 28px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--blur));
+    border: 1px solid var(--glass-border);
+    border-radius: 22px;
+    overflow: hidden;
+    transition: transform 0.4s cubic-bezier(.2,.9,.2,1), border-color 0.4s, background 0.4s;
+  }
+  .model-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--line-strong);
+    background: var(--glass-bg-strong);
+  }
+  .model-card .model-spark {
+    position: absolute;
+    top: 0; right: 0;
+    width: 55%;
+    height: 100%;
+    opacity: 0.55;
+    pointer-events: none;
+  }
+  .model-card .model-spark svg {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+  .model-card .model-tag {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    color: var(--ink-faint);
+    margin-bottom: 12px;
+    position: relative;
+    z-index: 2;
+  }
+  .model-card h3 {
+    font-family: var(--font-display);
+    font-size: 26px;
+    letter-spacing: -0.01em;
+    margin: 0 0 12px;
+    position: relative;
+    z-index: 2;
+    background: var(--grad);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .model-card p {
+    color: var(--ink-dim);
+    font-size: 14px;
+    line-height: 1.6;
+    margin: 0 0 16px;
+    max-width: 90%;
+    position: relative;
+    z-index: 2;
+  }
+  .model-card .model-meta {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--ink-faint);
+    letter-spacing: 0.08em;
+    position: relative;
+    z-index: 2;
+  }
+
+  /* === METRICS section === */
+  .metrics-grid {
+    margin-top: 56px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+  }
+  .metric-card {
+    padding: 28px 24px 24px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--blur));
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    transition: transform 0.4s, border-color 0.4s;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .metric-card:hover { transform: translateY(-4px); border-color: var(--line-strong); }
+  .metric-formula {
+    font-family: var(--font-mono);
+    font-size: 24px;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    padding: 14px 16px;
+    background: rgba(255,255,255,0.02);
+    border: 1px dashed rgba(255,255,255,0.08);
+    border-radius: 10px;
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+  .metric-formula .formula-text {
+    background: var(--grad);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    font-weight: 600;
+  }
+  .metric-formula .formula-sub {
+    font-size: 14px;
+    color: var(--ink-faint);
+  }
+  .metric-name {
+    font-family: var(--font-display);
+    font-size: 28px;
+    letter-spacing: -0.02em;
+    margin: 4px 0 0;
+  }
+  .metric-full {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: var(--ink-faint);
+    margin-bottom: 4px;
+  }
+  .metric-card p {
+    color: var(--ink-dim);
+    font-size: 13px;
+    line-height: 1.55;
+    margin: 0 0 8px;
+  }
+  .metric-bar {
+    width: 100%;
+    height: 4px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .metric-bar-fill {
+    height: 100%;
+    width: 0;
+    background: var(--c, var(--grad-1));
+    border-radius: 2px;
+    box-shadow: 0 0 10px var(--c, var(--grad-1));
+    animation: barGrow 1.6s 0.3s cubic-bezier(.2,.9,.2,1) forwards;
+  }
+  @keyframes barGrow { to { width: var(--w); } }
+  .metric-meta {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--ink-faint);
+    letter-spacing: 0.06em;
+    margin-top: 4px;
+  }
+
+  @media (max-width: 860px) {
+    .hero { grid-template-columns: 1fr; min-height: auto; padding-top: 110px; }
+    .hero-visual { max-width: 480px; margin: 0 auto; }
+    .what-grid { grid-template-columns: 1fr; }
+    .pipeline { grid-template-columns: repeat(2, 1fr); }
+    .features { grid-template-columns: 1fr; }
+    .models-grid { grid-template-columns: 1fr; }
+    .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+    .pipe-step::after { display: none; }
+  }
+</style>
+</head>
+<body>
+<script>document.addEventListener('DOMContentLoaded',()=>requestAnimationFrame(()=>document.body.classList.add('loaded')));</script>
+
+<div class="cursor-blob" id="cursorBlob"></div>
+
+<!-- NAV -->
+<nav class="nav" id="nav" data-screen-label="00 Nav">
+  <a href="#" class="brand"><span class="brand-mark"></span>ForecastLab</a>
+  <div class="nav-links">
+    <a href="#overview">시계열이란</a>
+    <a href="#pipeline">예측 프로세스</a>
+    <a href="#models">모델 종류</a>
+    <a href="#metrics">평가지표</a>
+    <a href="upload.html" class="start-btn">시작하기 →</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero" data-screen-label="01 Landing Hero">
+  <div class="hero-copy">
+    <div class="eyebrow hero-eye">TIME-SERIES INTELLIGENCE · v2.6</div>
+    <h1>
+      <span class="line"><span>A Workspace for</span></span>
+      <span class="line"><span class="grad-text">Time Series Forecasting</span></span>
+    </h1>
+    <p class="lead">
+      시계열 데이터를 업로드하면 예측 결과와 모델별 성능을 한눈에 확인할 수 있습니다.
+    </p>
+    <div class="hero-cta">
+      <a href="upload.html" class="btn btn-primary">
+        시작하기
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+      </a>
+      <a href="dashboard.html" class="btn btn-ghost">데모 보기</a>
+    </div>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="v grad-text">12+</div><div class="l">Models</div></div>
+      <div class="hero-stat"><div class="v grad-text">< 8s</div><div class="l">Avg analyze</div></div>
+      <div class="hero-stat"><div class="v grad-text">99.2%</div><div class="l">Auto detect</div></div>
+    </div>
+  </div>
+
+  <div class="hero-visual" id="heroVisual">
+    <div class="visual-stage" id="visualStage">
+      <div class="visual-card" id="heroCard">
+        <!-- 3D chart svg injected by JS based on variant -->
+      </div>
+      <div class="floating-card fc-1">
+        <div class="fc-label">Forecast · Q3</div>
+        <div class="fc-value mono">$ 4.82M</div>
+        <div class="fc-trend">▲ 12.4%</div>
+      </div>
+      <div class="floating-card fc-2">
+        <div class="fc-label">Confidence</div>
+        <div class="fc-value mono">94.1%</div>
+      </div>
+      <div class="floating-card fc-3">
+        <div class="fc-label">Best model</div>
+        <div class="fc-value">Prophet</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="scroll-hint">SCROLL</div>
+</section>
+
+<!-- 01 OVERVIEW · 시계열이란 -->
+<section class="section" id="overview" data-screen-label="02 What is time-series">
+  <div class="what-grid">
+    <div class="reveal">
+      <div class="section-eye eyebrow">01 · 시계열이란</div>
+      <h2>시간이 만든 <span class="grad-text">패턴</span>은 미래를 말한다.</h2>
+      <p class="lead">
+        시계열(Time-series)은 시간 순서대로 관측된 데이터입니다. 매출, 트래픽, 센서 신호 — 시간 축 위의 모든 점은 <strong style="color:var(--ink);">자기상관</strong>을 가지며, 그 안에는 <strong style="color:var(--ink);">추세 · 계절성 · 잔차</strong> 세 겹의 이야기가 숨어 있습니다.
+      </p>
+      <div style="margin-top: 32px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
+        <div><div class="eyebrow" style="margin-bottom: 6px;">TREND</div><div style="color: var(--ink); font-size: 14px;">장기 방향성</div></div>
+        <div><div class="eyebrow" style="margin-bottom: 6px;">SEASONAL</div><div style="color: var(--ink); font-size: 14px;">반복 주기</div></div>
+        <div><div class="eyebrow" style="margin-bottom: 6px;">RESIDUAL</div><div style="color: var(--ink); font-size: 14px;">설명되지 않는 잔차</div></div>
+      </div>
+    </div>
+    <div class="reveal diagram-card" id="overview3d">
+      <!-- Single stacked decomposition chart — injected by JS -->
+    </div>
+  </div>
+</section>
+
+<!-- 02 PIPELINE · 예측 프로세스 -->
+<section class="section" id="pipeline" data-screen-label="03 Pipeline">
+  <div class="reveal">
+    <div class="section-eye eyebrow">02 · 예측 프로세스</div>
+    <h2>5 단계, <span class="grad-text">완전 자동.</span></h2>
+    <p class="lead">데이터 수집부터 의사결정까지 — 사용자가 클릭해야 하는 건 단 두 번뿐입니다. 업로드, 그리고 분석.</p>
+  </div>
+
+  <div class="pipeline reveal-stagger reveal">
+    <div class="pipe-step">
+      <div class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></div>
+      <div class="num">01 · COLLECT</div>
+      <div class="title">데이터 수집</div>
+      <div class="desc">CSV 업로드 또는 API 연결. 자동 스키마 감지.</div>
+    </div>
+    <div class="pipe-step">
+      <div class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg></div>
+      <div class="num">02 · CLEAN</div>
+      <div class="title">전처리</div>
+      <div class="desc">결측치 보간, 이상치 탐지, 정상성 변환.</div>
+    </div>
+    <div class="pipe-step">
+      <div class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg></div>
+      <div class="num">03 · LEARN</div>
+      <div class="title">패턴 학습</div>
+      <div class="desc">ARIMA, Prophet, LSTM 자동 비교 후 최적 선택.</div>
+    </div>
+    <div class="pipe-step">
+      <div class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg></div>
+      <div class="num">04 · FORECAST</div>
+      <div class="title">예측</div>
+      <div class="desc">신뢰구간과 함께 미래 시점 추정.</div>
+    </div>
+    <div class="pipe-step">
+      <div class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
+      <div class="num">05 · DECIDE</div>
+      <div class="title">의사결정</div>
+      <div class="desc">리포트 PDF, 예측 CSV 자동 생성.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 03 MODELS · 모델 종류 -->
+<section class="section" id="models" data-screen-label="04 Models">
+  <div class="reveal">
+    <div class="section-eye eyebrow">03 · 모델 종류</div>
+    <h2>4 가지 <span class="grad-text">예측 엔진</span>이 동시에 달립니다.</h2>
+    <p class="lead">통계 기반의 정직한 베이스라인부터 비선형을 다루는 딥러닝까지 — 데이터가 들어오면 모두 동시에 학습되고, 가장 성능이 좋은 모델이 선택됩니다.</p>
+  </div>
+  <div class="models-grid reveal">
+    <div class="model-card" data-model="arima">
+      <div class="model-spark" data-kind="arima"></div>
+      <div class="model-tag">STATISTICAL</div>
+      <h3>ARIMA / SARIMA</h3>
+      <p>자기회귀(AR) + 차분(I) + 이동평균(MA). 정상성 가정 하에 안정적인 통계적 베이스라인. 계절성을 추가한 SARIMA 까지.</p>
+      <div class="model-meta">
+        <span>· 짧은 시계열에 강함</span>
+        <span>· 해석 가능</span>
+      </div>
+    </div>
+    <div class="model-card" data-model="prophet">
+      <div class="model-spark" data-kind="prophet"></div>
+      <div class="model-tag">DECOMPOSITION</div>
+      <h3>Prophet</h3>
+      <p>Meta가 만든 분해 기반 모델. 추세 변화점, 휴일 효과, 강한 계절성을 자동으로 처리. 결측에도 강건합니다.</p>
+      <div class="model-meta">
+        <span>· 휴일 자동</span>
+        <span>· 변화점 탐지</span>
+      </div>
+    </div>
+    <div class="model-card" data-model="ets">
+      <div class="model-spark" data-kind="ets"></div>
+      <div class="model-tag">SMOOTHING</div>
+      <h3>ETS</h3>
+      <p>지수평활(Exponential Smoothing). 최근 값에 더 큰 가중치. 짧은 시계열, 부드러운 추세, 곱셈형 계절성에 효과적.</p>
+      <div class="model-meta">
+        <span>· 빠름</span>
+        <span>· 적은 데이터 OK</span>
+      </div>
+    </div>
+    <div class="model-card" data-model="lstm">
+      <div class="model-spark" data-kind="lstm"></div>
+      <div class="model-tag">DEEP LEARNING</div>
+      <h3>LSTM / Transformer</h3>
+      <p>순환 신경망과 어텐션 기반 모델. 비선형 패턴, 다변량 입력, 장기 의존성에 유리. 데이터가 충분할 때 최고의 정확도.</p>
+      <div class="model-meta">
+        <span>· 비선형</span>
+        <span>· 다변량 입력</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 04 METRICS · 평가지표 -->
+<section class="section" id="metrics" data-screen-label="05 Metrics">
+  <div class="reveal">
+    <div class="section-eye eyebrow">04 · 평가지표</div>
+    <h2>예측의 <span class="grad-text">진실</span>은 숫자로 검증됩니다.</h2>
+    <p class="lead">하나의 숫자만 믿으면 함정에 빠집니다. ForecastLab은 4가지 지표를 동시에 보여주고, 각 지표가 무엇을 강조하는지 설명합니다.</p>
+  </div>
+  <div class="metrics-grid reveal">
+    <div class="metric-card">
+      <div class="metric-formula">
+        <span class="formula-text">|y − ŷ| / y</span>
+        <span class="formula-sub">× 100 / n</span>
+      </div>
+      <div class="metric-name">MAPE</div>
+      <div class="metric-full">Mean Absolute Percentage Error</div>
+      <p>퍼센트 단위라 직관적. 단, 실제값이 0 근처면 폭발하는 약점이 있습니다.</p>
+      <div class="metric-bar"><div class="metric-bar-fill" style="--w: 78%; --c: var(--grad-1);"></div></div>
+      <div class="metric-meta"><span>직관성</span><span class="mono">★★★★☆</span></div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-formula">
+        <span class="formula-text">√Σ(y − ŷ)²</span>
+        <span class="formula-sub">/ n</span>
+      </div>
+      <div class="metric-name">RMSE</div>
+      <div class="metric-full">Root Mean Squared Error</div>
+      <p>큰 오차에 패널티가 큽니다. 원본 데이터와 단위가 같아 비교가 쉽습니다.</p>
+      <div class="metric-bar"><div class="metric-bar-fill" style="--w: 92%; --c: var(--grad-2);"></div></div>
+      <div class="metric-meta"><span>이상치 민감</span><span class="mono">★★★★★</span></div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-formula">
+        <span class="formula-text">Σ|y − ŷ|</span>
+        <span class="formula-sub">/ n</span>
+      </div>
+      <div class="metric-name">MAE</div>
+      <div class="metric-full">Mean Absolute Error</div>
+      <p>이상치에 강건. 모든 오차를 동등하게 취급하므로 robust한 평가가 필요할 때.</p>
+      <div class="metric-bar"><div class="metric-bar-fill" style="--w: 65%; --c: var(--grad-3);"></div></div>
+      <div class="metric-meta"><span>강건성</span><span class="mono">★★★★★</span></div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-formula">
+        <span class="formula-text">−2 ln L</span>
+        <span class="formula-sub">+ 2k</span>
+      </div>
+      <div class="metric-name">AIC / BIC</div>
+      <div class="metric-full">Information Criterion</div>
+      <p>모델의 복잡도(파라미터 수)를 패널티로 부과. 과적합을 막는 모델 선택 기준.</p>
+      <div class="metric-bar"><div class="metric-bar-fill" style="--w: 84%; --c: var(--grad-1);"></div></div>
+      <div class="metric-meta"><span>모델 선택</span><span class="mono">★★★★☆</span></div>
+    </div>
+  </div>
+
+  <div class="cta-block reveal" data-screen-label="06 CTA">
+    <div class="eyebrow" style="margin-bottom: 16px;">READY?</div>
+    <h2 class="h-display">지금 <span class="grad-text">8초</span> 안에 첫 예측을.</h2>
+    <p>CSV를 끌어다 놓으면 됩니다. 설정도, 코드도 필요 없습니다.</p>
+    <a href="upload.html" class="btn btn-primary">CSV 업로드 →</a>
+  </div>
+</section>
+
+<footer class="footer">
+  <div>FORECASTLAB · 2026</div>
+  <div>v 2.6.1 · BUILD 4421</div>
+</footer>
+
+<!-- TWEAKS PANEL -->
+<aside class="tweaks" id="tweaks">
+  <h3>Tweaks</h3>
+  <label>Color gradient</label>
+  <div class="swatch-row" id="swatchRow"></div>
+  <label>Hero visual</label>
+  <div class="tweak-radio" id="visualRow">
+    <button data-v="line">3D Line · 회전</button>
+    <button data-v="wave">Flowing wave · 마우스 일렁임</button>
+    <button data-v="band">Forecast band · 살아있는 신뢰구간</button>
+    <button data-v="particle">Particle field · 시간의 흐름</button>
+  </div>
+</aside>
+
+<script src="hero-visuals.js?v=5"></script>
+<script src="landing.js?v=5"></script>
+</body>
+</html>

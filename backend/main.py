@@ -39,6 +39,19 @@ def _series_to_points(s: pd.Series) -> List[dict]:
     return out
 
 
+def _series_to_points_with_meta(s: pd.Series, missing_mask: pd.Series, outliers_mask: pd.Series) -> List[dict]:
+    out = []
+    for ts, v in s.items():
+        t = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+        is_missing = bool(missing_mask.get(ts, False))
+        is_outlier = bool(outliers_mask.get(ts, False))
+        if v is None or (isinstance(v, float) and not np.isfinite(v)):
+            out.append({"t": t, "y": None, "is_missing": is_missing, "is_outlier": is_outlier})
+        else:
+            out.append({"t": t, "y": float(v), "is_missing": is_missing, "is_outlier": is_outlier})
+    return out
+
+
 def _model_result_to_json(m: ModelOutput) -> dict:
     return {
         "model": m.model,
@@ -90,6 +103,22 @@ async def forecast(
 
     best_model, reason = pick_best_model(outputs)
 
+    from statsmodels.tsa.stattools import adfuller
+    from statsmodels.stats.diagnostic import acorr_ljungbox
+
+    try:
+        adf_res = adfuller(series.dropna())
+        adf_stat, adf_pvalue = float(adf_res[0]), float(adf_res[1])
+    except Exception:
+        adf_stat, adf_pvalue = None, None
+        
+    try:
+        lb_res = acorr_ljungbox(series.dropna(), lags=[min(10, max(1, len(series) // 5))], return_df=True)
+        ljung_box_stat = float(lb_res.iloc[0]["lb_stat"])
+        ljung_box_pvalue = float(lb_res.iloc[0]["lb_pvalue"])
+    except Exception:
+        ljung_box_stat, ljung_box_pvalue = None, None
+
     # First-N preview of the raw cleaned series for the frontend.
     preview = _series_to_points(series.iloc[: min(50, len(series))])
 
@@ -104,10 +133,20 @@ async def forecast(
             "frequency": pre.frequency,
             "preprocessing_notes": pre.notes,
             "preview": preview,
+            "statistics": {
+                "missing_count": pre.missing_count,
+                "missing_method": pre.missing_method,
+                "outlier_count": pre.outlier_count,
+                "outlier_method": pre.outlier_method,
+                "adf_stat": adf_stat,
+                "adf_pvalue": adf_pvalue,
+                "ljung_box_stat": ljung_box_stat,
+                "ljung_box_pvalue": ljung_box_pvalue,
+            }
         },
         "horizon": horizon,
-        "train": _series_to_points(train),
-        "test": _series_to_points(test),
+        "train": _series_to_points_with_meta(train, pre.missing_mask, pre.outliers_mask),
+        "test": _series_to_points_with_meta(test, pre.missing_mask, pre.outliers_mask),
         "results": [_model_result_to_json(o) for o in outputs],
         "best_model": best_model,
         "best_model_reason": reason,

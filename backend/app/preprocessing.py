@@ -29,6 +29,12 @@ class PreprocessResult:
     value_column: str
     frequency: Optional[str]
     notes: List[str] = field(default_factory=list)
+    missing_count: int = 0
+    missing_method: str = "없음"
+    outlier_count: int = 0
+    outlier_method: str = "없음"
+    missing_mask: pd.Series = field(default_factory=lambda: pd.Series(dtype=bool))
+    outliers_mask: pd.Series = field(default_factory=lambda: pd.Series(dtype=bool))
 
 
 # Candidate header names we'll auto-detect.
@@ -124,18 +130,72 @@ def preprocess(raw_bytes: bytes) -> PreprocessResult:
 
     # Fill remaining NaNs using a light-touch strategy: time-interpolate if
     # the index is datetime; leave unfilled values as last resort.
-    n_missing = int(frame.isna().sum())
+    missing_mask = frame.isna()
+    n_missing = int(missing_mask.sum())
+    missing_method = "없음"
     if n_missing > 0:
         if isinstance(frame.index, pd.DatetimeIndex):
             frame = frame.interpolate(method="time", limit_direction="both")
+            missing_method = "시간 보간 (Time Interpolation)"
         else:
             frame = frame.interpolate(method="linear", limit_direction="both")
-        notes.append(f"결측치 {n_missing}개를 시간 보간으로 채웠습니다.")
+            missing_method = "선형 보간 (Linear Interpolation)"
+        notes.append(f"결측치 {n_missing}개를 {missing_method}으로 채웠습니다.")
 
     # If anything is still NaN (e.g. at the very edges), fill with nearest
     # observed value — minimal correction principle.
     if frame.isna().any():
         frame = frame.ffill().bfill()
+        if missing_method == "없음":
+            missing_method = "이전/이후 값 채우기 (ffill/bfill)"
+            
+    # Outlier detection
+    outlier_count = 0
+    outlier_method = "없음"
+    outliers_mask = pd.Series(False, index=frame.index)
+    
+    if len(frame) >= 14:
+        try:
+            from statsmodels.tsa.seasonal import STL
+            # Try STL if we have enough data and a discernible frequency
+            from app.forecasting import _infer_seasonal_period
+            period = _infer_seasonal_period(freq, len(frame))
+            if period > 1 and len(frame) >= 2 * period:
+                stl = STL(frame, period=period, robust=True).fit()
+                resid = stl.resid
+                outlier_method = "STL 잔차 IQR (STL Residuals IQR)"
+            else:
+                window = min(len(frame) // 5, 21)
+                window = window + 1 if window % 2 == 0 else window
+                window = max(3, window)
+                rolling_med = frame.rolling(window=window, center=True, min_periods=1).median()
+                resid = frame - rolling_med
+                outlier_method = "이동 중앙값 잔차 IQR (Rolling Median Residual IQR)"
+                
+            q1 = resid.quantile(0.25)
+            q3 = resid.quantile(0.75)
+            iqr = q3 - q1
+            
+            # Using 3*IQR for strong outliers to avoid false positives
+            lower_bound = q1 - 3 * iqr
+            upper_bound = q3 + 3 * iqr
+            
+            outliers_mask = (resid < lower_bound) | (resid > upper_bound)
+            outlier_count = int(outliers_mask.sum())
+            
+            if outlier_count > 0:
+                frame.loc[outliers_mask] = np.nan
+                # Re-interpolate outliers
+                if isinstance(frame.index, pd.DatetimeIndex):
+                    frame = frame.interpolate(method="time", limit_direction="both")
+                else:
+                    frame = frame.interpolate(method="linear", limit_direction="both")
+                frame = frame.ffill().bfill()
+                notes.append(f"이상치 {outlier_count}개를 탐지 및 보간 처리했습니다 ({outlier_method}).")
+            else:
+                outlier_method = "탐지된 이상치 없음"
+        except Exception as e:
+            notes.append(f"이상치 탐지 실패: {str(e)}")
 
     if len(frame) < 8:
         raise ValueError("유효한 시계열 포인트가 8개 미만입니다 — 예측이 불가합니다.")
@@ -150,4 +210,10 @@ def preprocess(raw_bytes: bytes) -> PreprocessResult:
         value_column=value_col,
         frequency=freq,
         notes=notes,
+        missing_count=n_missing,
+        missing_method=missing_method,
+        outlier_count=outlier_count,
+        outlier_method=outlier_method,
+        missing_mask=missing_mask,
+        outliers_mask=outliers_mask,
     )
