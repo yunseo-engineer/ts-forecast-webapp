@@ -1,4 +1,4 @@
-# Chronos · ForecastLab Frontend (Claude Design)
+# ForecastLab Frontend
 
 기존 시스템(`../frontend`, port 3000)을 그대로 둔 채, **Claude Design** 핸드오프를 적용한 별도 Next.js 14 프론트엔드. 백엔드(`../backend`, port 8000)는 공유한다.
 
