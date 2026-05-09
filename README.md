@@ -1,134 +1,52 @@
-# Chronos — Time Series Forecasting Web App
+# ForecastLab — 시계열 데이터 분석 및 예측 플랫폼
 
-단변량 시계열 CSV 파일을 업로드하면 자동으로 전처리하고, 여러 예측 모델을
-동시에 실행하여 결과를 대시보드로 비교·검증할 수 있는 웹 애플리케이션의
-**베이스라인 프로젝트**입니다.
+**ForecastLab**은 사용자가 업로드한 시계열 데이터를 분석하고, 최적의 통계 모델을 통해 미래 데이터를 예측하는 올인원 웹 애플리케이션입니다. 복잡한 설정 없이 단 한 번의 업로드로 분석 결과와 리포트를 제공합니다.
+> 홍익대학교 산업데이터공학과 C373022 장윤서
+---
+
+## 🔗 배포 링크
+> **[ForecastLab 서비스 바로가기](https://ts-forecast-webapp.vercel.app/)**  
 
 ---
 
-## 구성
+## ✨ 주요 기능
 
-```
-timeseries-forecast-app/
-├── frontend/                 # Next.js 14 · TypeScript · Tailwind · Zustand · Recharts
-│   ├── app/
-│   │   ├── page.tsx          # 랜딩 페이지 (중앙 정렬, 검정/회색 톤, 그라데이션)
-│   │   └── dashboard/
-│   │       └── page.tsx      # 분석 대시보드
-│   ├── components/
-│   │   ├── landing/          # Header · Hero · FileUploadBox · FeatureHighlights · Footer
-│   │   ├── dashboard/        # DashboardHeader · HorizonControl · ForecastChart ·
-│   │   │                     # MetricsTable · MetricGroupChart · BiasCard · BestModelCard ...
-│   │   └── ui/               # Button · Card · Badge · Spinner
-│   ├── lib/                  # 타입 정의 + API 클라이언트
-│   └── store/                # Zustand 전역 상태 (파일 · 시평 · 결과 · 오류)
-│
-└── backend/                  # FastAPI · pandas · statsmodels
-    ├── main.py               # POST /api/forecast
-    └── app/
-        ├── preprocessing.py  # 자동 전처리 파이프라인
-        ├── forecasting.py    # 5개 예측 모델 + 최적 모델 선정
-        └── metrics.py        # MAE · MSE · RMSE · MAPE · SMAPE · MASE · MdRAE · GMRAE · RSFE · TS
-```
+### 1. 자동 전처리 (Auto-Preprocessing)
+- **결측치 보간**: Linear, Interpolation, Forward-fill 등 데이터 특성에 맞는 자동 보간 수행.
+- **이상치 탐지 및 처리**: IQR 방식을 통한 이상치 자동 식별 및 보정.
+- **정상성 분석**: ADF Test를 통한 데이터의 정상성 확인 및 분석.
+- **Ljung-Box 검정**: 예측 모델 적용 후 잔차에 자기상관이 남아 있는지 검정하여, 모델이 시계열 패턴을 충분히 설명했는지 평가.
 
-### 컴포넌트 분리 원칙
+### 2. 다중 예측 엔진 (Multi-Model Engine)
+- **핵심 모델 동시 실행**:
+    - **ARIMA / SARIMA**: 데이터의 자기상관을 이용한 전통적 통계 모델.
+    - **Holt-Winters**: 추세(Trend)와 계절성(Seasonality)을 모두 고려한 지수평활 모델.
+    - **Holt's Exponential Smoothing**: 선형 추세 추종에 특화된 지수평활 모델.
+    - **ETS (Error-Trend-Seasonal)**: 오차, 추세, 계절성 구성요소를 기반으로 시계열 패턴을 모델링하는 지수평활 기반 모델.
+    - **Moving Average**: 최근 관측값의 평균을 활용해 단기 변동을 완화하고 안정적인 기준 예측값을 생성하는 단순 예측 모델.
 
-**모든 페이지는 독립된 컴포넌트의 조합으로만 구성**되어 있습니다.
-예를 들어 히어로 문구를 수정하려면 `components/landing/Hero.tsx`만 수정하면 되며,
-CTA 버튼 위치를 바꾸려면 `app/page.tsx`의 컴포넌트 순서만 변경하면 됩니다.
-대시보드 패널 또한 `app/dashboard/page.tsx`에서 재배열·추가·제거가 가능합니다.
+- **최적 모델 자동 선정**: RMSE, MAPE, MAE 등 다양한 평가 지표를 종합하여 가장 예측 성능이 우수한 모델을 자동으로 선정합니다.
+
+### 3. 고품질 대시보드 (Analytical Dashboard)
+- **인터랙티브 시계열 시각화**: 시계열 그래프에서 커서를 올리면 관측 구간에서는 실제값, 결측/보간 여부, 이상치 여부 등 데이터 품질 정보를 확인할 수 있고, 예측 구간에서는 예측값과 신뢰구간(CI 80/95)을 확인할 수 있습니다.
+- **분석 차트 제공**: 데이터 분해(Decomposition), ACF/PACF 그래프 등을 통해 추세, 계절성, 자기상관 구조를 시각적으로 분석할 수 있습니다.
+- **통계 지표 및 평가 지표**: ADF Test, Ljung-Box Test, RMSE, MAPE, MAE 등 다양한 통계 검정 및 예측 성능 지표를 제공합니다.
+- **인사이트 제공**: 모델별 성능 비교 테이블과 최적 모델 선정 근거를 함께 제공하여 예측 결과를 해석하기 쉽게 지원합니다.
+
+### 4. 리포트 및 데이터 내보내기
+- **PDF 리포트**: 분석 결과를 한눈에 확인할 수 있는 PDF 리포트 자동 생성.
+- **CSV 데이터**: 예측된 미래 데이터를 CSV 형식으로 즉시 다운로드 가능.
 
 ---
 
-## 기능 요구사항 매핑
+## 🚀 사용 방법
 
-| 요구사항 | 구현 위치 |
-|---|---|
-| 2.1 CSV 업로드 | `components/landing/FileUploadBox.tsx` |
-| 2.2 파일 변경 시 자동 재예측 | `store/appStore.ts` (`setFile` 이 캐시 초기화) |
-| 2.3 예측시평 변경 | `components/dashboard/HorizonControl.tsx` |
-| 2.4 자동 전처리 | `backend/app/preprocessing.py` |
-| 2.5 다중 예측 모델 | `backend/app/forecasting.py` (5개 모델) |
-| 2.6 모델별 비교 시각화 | `components/dashboard/ForecastChart.tsx` + `ModelSelector.tsx` |
-| 2.7 모든 평가지표 계산 | `backend/app/metrics.py` (10개 지표) |
-| 2.8 평가지표 대시보드 | `MetricsTable` + `MetricGroupChart` + `BiasCard` |
-| 2.9 예측 시각화 | `ForecastChart` (학습 / 테스트 / 미래 구간 색상 구분) |
-| 2.10 최적 모델 추천 | `forecasting.py::pick_best_model` + `BestModelCard` |
+1. **데이터 준비**: 날짜 열과 수치 데이터(`value`, `y` 등)가 포함된 단변량 CSV 파일을 준비합니다.
+2. **파일 업로드**: 랜딩 페이지의 '시작하기' 버튼을 누른 후, 파일을 드래그 앤 드롭하거나 선택하여 업로드합니다.
+3. **분석 수행**: '분석 시작' 버튼을 누르면 서버에서 전처리 및 다중 모델 학습이 자동으로 진행됩니다.
+4. **결과 확인**: 대시보드에서 최적의 모델과 예측 결과를 확인하고, 차트와 지표를 통해 심층 분석을 수행합니다.
+5. **저장**: 필요한 경우 리포트를 PDF로 저장하거나 예측 데이터를 다운로드합니다.
+
 
 ---
 
-## 실행 방법
-
-### 1. 백엔드 (FastAPI)
-
-```bash
-cd backendu
-python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
-```
-
-`http://localhost:8000/api/health` 에 접속하여 `{"ok": true}` 가 반환되는지 확인하세요.
-
-### 2. 프론트엔드 (Next.js)
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-`http://localhost:3000` 에서 랜딩 페이지를 확인할 수 있습니다.
-개발 환경에서는 Next.js 의 `rewrites` 설정이 `/api/*` 요청을
-`http://localhost:8000` 의 FastAPI 서버로 프록시합니다.
-
-#### 백엔드 URL 변경
-
-프론트엔드가 다른 호스트의 백엔드를 사용해야 한다면:
-
-```bash
-# frontend/.env.local
-NEXT_PUBLIC_BACKEND_URL=https://your-backend.example.com
-```
-
----
-
-## CSV 형식
-
-- 시간 열 1개 + 값 열 1개의 **단변량** 시계열
-- 시간 열 이름은 `date`, `datetime`, `time`, `timestamp`, `ds`, `period`, `month` 등으로 인식
-- 값 열은 숫자로 파싱 가능한 첫 번째 비시간 열을 자동 선택
-- 한글 CSV (cp949, euc-kr 인코딩)도 자동 인식
-
-예시:
-
-```csv
-date,value
-2020-01-01,120.5
-2020-02-01,132.1
-2020-03-01,141.0
-...
-```
-
----
-
-## 내장 예측 모델
-
-| 키 | 모델 |
-|---|---|
-| `moving_average` | 이동평균 (window 자동 설정) |
-| `ses` | Simple Exponential Smoothing |
-| `holt` | Holt 선형 추세 |
-| `holt_winters` | Holt-Winters 계절 (주기는 빈도에서 자동 추정, 계절성 부재 시 Holt 로 대체) |
-| `poly_trend` | 2차 다항식 추세 |
-
-모델을 추가하려면 `backend/app/forecasting.py` 의 `run_all_models()` 튜플에
-새 함수를 추가하고, 프론트엔드의 `lib/types.ts` 의 `MODEL_LABELS` 에
-키와 라벨을 추가하세요.
-
----
-
-## 라이선스
-
-내부 학습·프로젝트 용도 베이스라인.
